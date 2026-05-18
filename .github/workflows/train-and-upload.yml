@@ -1,0 +1,59 @@
+name: Train and Upload to Hugging Face
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:  # allows manual trigger
+
+jobs:
+  train-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: "pip"
+    
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+    
+    - name: Create model directory
+      run: mkdir -p model
+    
+    - name: Train model
+      run: python train.py
+    
+    - name: Upload to Hugging Face Hub
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      run: |
+        python - <<'EOF'
+        import os
+        from huggingface_hub import HfApi
+        
+        token = os.environ["HF_TOKEN"]
+        # Replace with your Hugging Face repo name
+        repo_id = "titis84/imdb-sentiment-nn"  # <-- CHANGE THIS
+        
+        api = HfApi()
+        # Create repo if it doesn't exist
+        api.create_repo(repo_id, token=token, exist_ok=True)
+        
+        # Upload all model artifacts
+        import glob
+        files_to_upload = glob.glob("model/*")
+        for filepath in files_to_upload:
+            filename = os.path.basename(filepath)
+            api.upload_file(
+                path_or_fileobj=filepath,
+                path_in_repo=f"model/{filename}",
+                repo_id=repo_id,
+                token=token,
+            )
+            print(f"Uploaded {filename}")
+        print(f"Model uploaded to https://huggingface.co/{repo_id}")
+        EOF
